@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality } from "@google/genai";
 import { StyleType } from "./types";
 
@@ -41,7 +40,8 @@ const getCartoonPrompt = (
   description: string,
   styleType: StyleType,
   styleName: string,
-  signature: string
+  signature: string,
+  hasCharacterImage: boolean
 ) => {
   const signatureText = signature
     ? ` Subtly place the signature '${signature}' in one of the bottom corners of the image.`
@@ -50,21 +50,33 @@ const getCartoonPrompt = (
     ? `in the distinct artistic style of ${styleName} magazine`
     : `in the distinct artistic style of cartoonist ${styleName}`;
   
-  return `Generate a single-panel cartoon ${stylePrompt}. The scene is: ${description}. The cartoon should be humorous and thought-provoking, capturing the essence of the specified style.${signatureText}`;
+  const characterInstruction = hasCharacterImage 
+    ? ' Feature the character from the provided image in the scene.' 
+    : '';
+
+  return `Generate a single-panel cartoon ${stylePrompt}. The scene is: ${description}.${characterInstruction} The cartoon should be humorous and thought-provoking, capturing the essence of the specified style.${signatureText}`;
 };
 
 export const generateCartoon = async (
   description: string,
   styleType: StyleType,
   styleName: string,
-  signature: string
+  signature: string,
+  characterImage: File | null
 ): Promise<string> => {
-  const prompt = getCartoonPrompt(description, styleType, styleName, signature);
+  const prompt = getCartoonPrompt(description, styleType, styleName, signature, !!characterImage);
+  
+  const parts: any[] = [];
+  if (characterImage) {
+      const imagePart = await fileToGenerativePart(characterImage);
+      parts.push(imagePart);
+  }
+  parts.push({ text: prompt });
 
   const response = await ai.models.generateContent({
     model,
     contents: {
-      parts: [{ text: prompt }],
+      parts,
     },
     config: {
       responseModalities: [Modality.IMAGE],

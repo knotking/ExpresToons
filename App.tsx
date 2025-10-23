@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import type { ActiveTab, StyleType } from './types';
 import { generateCartoon, editImage } from './services/geminiService';
@@ -68,6 +67,9 @@ const App: React.FC = () => {
   const [signature, setSignature] = useState<string>('AI Artist');
   const [generatedCartoon, setGeneratedCartoon] = useState<string | null>(null);
   const [isGeneratingCartoon, setIsGeneratingCartoon] = useState<boolean>(false);
+  const [cartoonHistory, setCartoonHistory] = useState<string[]>([]);
+  const [characterImage, setCharacterImage] = useState<File | null>(null);
+  const [characterImagePreview, setCharacterImagePreview] = useState<string | null>(null);
 
   // Image editing state
   const [originalImage, setOriginalImage] = useState<File | null>(null);
@@ -75,6 +77,7 @@ const App: React.FC = () => {
   const [editPrompt, setEditPrompt] = useState<string>('Add a retro, 1980s style filter');
   const [editedImage, setEditedImage] = useState<string | null>(null);
   const [isEditingImage, setIsEditingImage] = useState<boolean>(false);
+  const [editHistory, setEditHistory] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -102,11 +105,33 @@ const App: React.FC = () => {
     if (file) {
       setOriginalImage(file);
       setEditedImage(null); // Clear previous edit
+      setEditHistory([]); // Clear history for the new image
       const reader = new FileReader();
       reader.onloadend = () => {
         setOriginalImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCharacterImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCharacterImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCharacterImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveCharacterImage = () => {
+    setCharacterImage(null);
+    setCharacterImagePreview(null);
+    const fileInput = document.getElementById('character-upload') as HTMLInputElement;
+    if (fileInput) {
+        fileInput.value = '';
     }
   };
 
@@ -132,15 +157,16 @@ const App: React.FC = () => {
     setIsGeneratingCartoon(true);
     setGeneratedCartoon(null);
     try {
-      const imageUrl = await generateCartoon(cartoonPrompt, styleType, styleName, signature);
+      const imageUrl = await generateCartoon(cartoonPrompt, styleType, styleName, signature, characterImage);
       setGeneratedCartoon(imageUrl);
+      setCartoonHistory(prev => [imageUrl, ...prev]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred.');
       console.error(e);
     } finally {
       setIsGeneratingCartoon(false);
     }
-  }, [cartoonPrompt, styleType, magazineStyle, cartoonistStyle, customStyle, signature]);
+  }, [cartoonPrompt, styleType, magazineStyle, cartoonistStyle, customStyle, signature, characterImage]);
   
   const handleEditImage = useCallback(async () => {
     if (!originalImage || !editPrompt) {
@@ -153,6 +179,7 @@ const App: React.FC = () => {
     try {
       const imageUrl = await editImage(originalImage, editPrompt);
       setEditedImage(imageUrl);
+      setEditHistory(prev => [imageUrl, ...prev]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred.');
       console.error(e);
@@ -170,6 +197,23 @@ const App: React.FC = () => {
                 <div>
                     <label className="block mb-2 text-sm font-medium text-gray-300">Cartoon Description</label>
                     <textarea value={cartoonPrompt} onChange={(e) => setCartoonPrompt(e.target.value)} rows={4} className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block w-full p-2.5" placeholder="e.g., A programmer arguing with a rubber duck"></textarea>
+                </div>
+
+                <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-300">Bring Your Own Character (Optional)</label>
+                    <div className="flex items-center gap-4">
+                        <div className="flex-grow">
+                          <input id="character-upload" type="file" accept="image/*" onChange={handleCharacterImageUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" />
+                        </div>
+                        {characterImagePreview && (
+                            <div className="relative flex-shrink-0">
+                                <img src={characterImagePreview} alt="Character preview" className="w-16 h-16 object-cover rounded-md" />
+                                <button onClick={handleRemoveCharacterImage} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0 w-6 h-6 flex items-center justify-center text-sm font-bold leading-none hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500">
+                                    &times;
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="space-y-4 p-4 bg-gray-700/50 rounded-lg">
@@ -229,6 +273,22 @@ const App: React.FC = () => {
                     Download Cartoon
                   </button>
                 )}
+                {cartoonHistory.length > 0 && (
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-300">Your Creations</h3>
+                    <div className="flex overflow-x-auto gap-4 p-2 bg-gray-900/50 rounded-lg">
+                      {cartoonHistory.map((imgSrc) => (
+                        <img
+                          key={imgSrc}
+                          src={imgSrc}
+                          alt="Previously generated cartoon"
+                          className="w-24 h-24 object-cover rounded-md cursor-pointer border-2 border-transparent hover:border-purple-400 transition-all duration-200"
+                          onClick={() => setGeneratedCartoon(imgSrc)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
         </div>
     );
@@ -259,6 +319,22 @@ const App: React.FC = () => {
                       Download Edited Image
                     </button>
                   )}
+                 {editHistory.length > 0 && (
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-300">Edit History</h3>
+                    <div className="flex overflow-x-auto gap-4 p-2 bg-gray-900/50 rounded-lg">
+                      {editHistory.map((imgSrc) => (
+                        <img
+                          key={imgSrc}
+                          src={imgSrc}
+                          alt="Previously edited image"
+                          className="w-24 h-24 object-cover rounded-md cursor-pointer border-2 border-transparent hover:border-purple-400 transition-all duration-200"
+                          onClick={() => setEditedImage(imgSrc)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
         </div>
         {originalImage && (
