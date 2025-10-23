@@ -1,0 +1,5 @@
+{
+  "name": "ExpressToons",
+  "description": "An application to generate cartoons in various magazine styles and perform AI-powered image editing using Gemini. Users can specify a magazine style, a scene description, and a signature to create unique cartoons, or upload their own images and edit them with simple text prompts.",
+  "requestFramePermissions": []
+}
