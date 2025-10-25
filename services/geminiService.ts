@@ -41,7 +41,8 @@ const getCartoonPrompt = (
   styleType: StyleType,
   styleName: string,
   signature: string,
-  hasCharacterImage: boolean
+  hasCharacterImage: boolean,
+  colorOption: 'color' | 'black_and_white'
 ) => {
   const signatureText = signature
     ? ` Subtly place the signature '${signature}' in one of the bottom corners of the image.`
@@ -53,8 +54,12 @@ const getCartoonPrompt = (
   const characterInstruction = hasCharacterImage 
     ? ' Feature the character from the provided image in the scene.' 
     : '';
+  
+  const colorInstruction = colorOption === 'black_and_white' 
+    ? ' The cartoon should be in black and white.'
+    : ' The cartoon should be in full color.';
 
-  return `Generate a single-panel cartoon ${stylePrompt}. The scene is: ${description}.${characterInstruction} The cartoon should be humorous and thought-provoking, capturing the essence of the specified style.${signatureText}`;
+  return `Generate a single-panel cartoon ${stylePrompt}. The scene is: ${description}.${characterInstruction}${colorInstruction} The cartoon should be humorous and thought-provoking, capturing the essence of the specified style.${signatureText}`;
 };
 
 export const generateCartoon = async (
@@ -62,9 +67,10 @@ export const generateCartoon = async (
   styleType: StyleType,
   styleName: string,
   signature: string,
-  characterImage: File | null
+  characterImage: File | null,
+  colorOption: 'color' | 'black_and_white'
 ): Promise<string> => {
-  const prompt = getCartoonPrompt(description, styleType, styleName, signature, !!characterImage);
+  const prompt = getCartoonPrompt(description, styleType, styleName, signature, !!characterImage, colorOption);
   
   const parts: any[] = [];
   if (characterImage) {

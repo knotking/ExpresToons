@@ -65,6 +65,7 @@ const App: React.FC = () => {
   const [cartoonistStyle, setCartoonistStyle] = useState<string>(cartoonists[0]);
   const [customStyle, setCustomStyle] = useState<string>('');
   const [signature, setSignature] = useState<string>('AI Artist');
+  const [colorOption, setColorOption] = useState<'color' | 'black_and_white'>('color');
   const [generatedCartoon, setGeneratedCartoon] = useState<string | null>(null);
   const [isGeneratingCartoon, setIsGeneratingCartoon] = useState<boolean>(false);
   const [cartoonHistory, setCartoonHistory] = useState<string[]>([]);
@@ -145,6 +146,33 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleShare = async (imageUrl: string | null, title: string, text: string, filename: string) => {
+    if (!imageUrl) return;
+
+    try {
+      // Convert base64 to Blob, then to File
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const file = new File([blob], filename, { type: blob.type });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: title,
+          text: text,
+        });
+      } else {
+        setError('Sharing files is not supported on your browser.');
+      }
+    } catch (err) {
+      // Ignore abort errors from the user closing the share sheet
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Sharing failed:', err);
+        setError('Could not share the image. Please try downloading it instead.');
+      }
+    }
+  };
+
   const handleGenerateCartoon = useCallback(async () => {
     const isCustom = (styleType === 'magazine' && magazineStyle === 'Other...') || (styleType === 'cartoonist' && cartoonistStyle === 'Other...');
     const styleName = isCustom ? customStyle : (styleType === 'magazine' ? magazineStyle : cartoonistStyle);
@@ -157,7 +185,7 @@ const App: React.FC = () => {
     setIsGeneratingCartoon(true);
     setGeneratedCartoon(null);
     try {
-      const imageUrl = await generateCartoon(cartoonPrompt, styleType, styleName, signature, characterImage);
+      const imageUrl = await generateCartoon(cartoonPrompt, styleType, styleName, signature, characterImage, colorOption);
       setGeneratedCartoon(imageUrl);
       setCartoonHistory(prev => [imageUrl, ...prev]);
     } catch (e) {
@@ -166,7 +194,7 @@ const App: React.FC = () => {
     } finally {
       setIsGeneratingCartoon(false);
     }
-  }, [cartoonPrompt, styleType, magazineStyle, cartoonistStyle, customStyle, signature, characterImage]);
+  }, [cartoonPrompt, styleType, magazineStyle, cartoonistStyle, customStyle, signature, characterImage, colorOption]);
   
   const handleEditImage = useCallback(async () => {
     if (!originalImage || !editPrompt) {
@@ -255,6 +283,35 @@ const App: React.FC = () => {
                     <label className="block mb-2 text-sm font-medium text-gray-300">Signature (Optional)</label>
                     <input type="text" value={signature} onChange={(e) => setSignature(e.target.value)} className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block w-full p-2.5" placeholder="e.g., Your Name"/>
                 </div>
+
+                <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-300">Color Style</label>
+                    <div className="flex items-center space-x-6">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input 
+                                type="radio" 
+                                name="colorOption" 
+                                value="color" 
+                                checked={colorOption === 'color'} 
+                                onChange={() => setColorOption('color')} 
+                                className="form-radio h-4 w-4 text-purple-600 bg-gray-700 border-gray-600 focus:ring-purple-500" 
+                            />
+                            <span className="text-gray-300">Color</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input 
+                                type="radio" 
+                                name="colorOption" 
+                                value="black_and_white" 
+                                checked={colorOption === 'black_and_white'} 
+                                onChange={() => setColorOption('black_and_white')} 
+                                className="form-radio h-4 w-4 text-purple-600 bg-gray-700 border-gray-600 focus:ring-purple-500" 
+                            />
+                            <span className="text-gray-300">Black & White</span>
+                        </label>
+                    </div>
+                </div>
+
                 <button onClick={handleGenerateCartoon} disabled={isGeneratingCartoon} className="w-full text-white bg-purple-600 hover:bg-purple-700 focus:ring-4 focus:outline-none focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:bg-gray-500 disabled:cursor-not-allowed">
                     {isGeneratingCartoon ? 'Generating...' : 'Generate Cartoon'}
                 </button>
@@ -263,15 +320,28 @@ const App: React.FC = () => {
                 <h3 className="text-lg font-semibold mb-2 text-gray-300">Generated Cartoon</h3>
                 <ImageDisplay src={generatedCartoon} alt="Generated Cartoon" isLoading={isGeneratingCartoon} placeholderText="Your generated cartoon will appear here." />
                 {generatedCartoon && !isGeneratingCartoon && (
-                  <button
-                    onClick={() => handleDownload(generatedCartoon, 'cartoon.png')}
-                    className="mt-4 w-full flex items-center justify-center gap-2 text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                    Download Cartoon
-                  </button>
+                  <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                    <button
+                      onClick={() => handleDownload(generatedCartoon, 'cartoon.png')}
+                      className="w-full flex items-center justify-center gap-2 text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      Download
+                    </button>
+                    {navigator.share && (
+                       <button
+                        onClick={() => handleShare(generatedCartoon, 'My ExpressToon Cartoon', 'Check out this cartoon I generated with ExpressToons!', 'cartoon.png')}
+                        className="w-full flex items-center justify-center gap-2 text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                           <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                        </svg>
+                        Share
+                      </button>
+                    )}
+                  </div>
                 )}
                 {cartoonHistory.length > 0 && (
                   <div className="mt-8">
@@ -309,15 +379,28 @@ const App: React.FC = () => {
                  <h3 className="text-lg font-semibold mb-2 text-gray-300">Edited Image</h3>
                  <ImageDisplay src={editedImage} alt="AI Edited result" isLoading={isEditingImage} placeholderText="Your edited image will appear here." />
                  {editedImage && !isEditingImage && (
-                    <button
-                      onClick={() => handleDownload(editedImage, 'edited-image.png')}
-                      className="mt-4 w-full flex items-center justify-center gap-2 text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                      Download Edited Image
-                    </button>
+                    <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                      <button
+                        onClick={() => handleDownload(editedImage, 'edited-image.png')}
+                        className="w-full flex items-center justify-center gap-2 text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Download
+                      </button>
+                      {navigator.share && (
+                        <button
+                          onClick={() => handleShare(editedImage, 'My Edited Image', 'Check out this image I edited with ExpressToons!', 'edited-image.png')}
+                          className="w-full flex items-center justify-center gap-2 text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                             <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                          </svg>
+                          Share
+                        </button>
+                      )}
+                    </div>
                   )}
                  {editHistory.length > 0 && (
                   <div className="mt-8">
